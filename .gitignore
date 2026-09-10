@@ -5,3 +5,4 @@ data/
 outputs/*.faiss
 outputs/*.npy
 .ipynb_checkpoints/
+outputs/*.json
