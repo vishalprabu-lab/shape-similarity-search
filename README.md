@@ -36,9 +36,10 @@ Launch it from the project root in the `brepnet` conda env: `streamlit run app.p
 - [x] Search with a new (non-indexed) STEP file
 - [x] Demo UI (Streamlit)
 - [ ] Reproducibility: `environment.yml` for the BRepNet environment, un-nesting the git repos under `external/`
-- [ ] Root-causing weaker match quality on geometrically complex parts (see Known Issues)
+- [ ] Root-causing weaker match quality on geometrically complex parts (see Known Issues), including alternatives to mean pooling
+- [ ] Labelled benchmark to quantify retrieval quality (currently spot-checked visually)
 
-Related: a second project (manufacturability/machining-feature screening) shares this same BRepNet backbone and is planned as a parallel effort.
+Related: a companion proof of concept (manufacturability/machining-feature screening) reuses this same BRepNet backbone.
 
 ## Project structure
 
