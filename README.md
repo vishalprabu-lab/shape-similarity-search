@@ -14,7 +14,9 @@ STEP file → occwl (parses B-Rep topology) → BRepNet (generates embedding) �
 - **BRepNet** ([AutodeskAILab/BRepNet](https://github.com/AutodeskAILab/BRepNet)) is a pretrained model that operates directly on B-Rep topology (topological message passing / custom convolution, not a transformer). We use its pretrained segmentation model and pull the per-face hidden representation from the layer before the final classification head, mean-pooled into one 84-dim vector per part.
 - **FAISS** (`IndexFlatL2`) indexes these vectors and returns nearest neighbors by Euclidean distance. Flat/brute-force is intentional — sufficient at 500 vectors, no need for approximate search yet.
 
-**What "similar" means here**: similar *feature composition* (mix of extrudes, fillets, chamfers, etc.), not necessarily similar dimensions or overall proportions. A thin rod and a thick block both made of a single plain extrude will match well. Confirmed via manual visual spot-checks (see Known Issues).
+**What "similar" means here**: similar *feature composition* (mix of extrudes, fillets, chamfers, etc.), not necessarily similar dimensions or overall proportions. A thin rod and a thick block both made of a single plain extrude will match well. Confirmed via manual visual spot-checks (see Known Issues). Re-embedding parts already in the index reproduces their stored embeddings to within ~1e-7.
+
+A reference presentation and project overview are in [`docs/`](docs/).
 
 ## Capabilities
 
@@ -33,7 +35,7 @@ Launch it from the project root in the `brepnet` conda env: `streamlit run app.p
 - [x] Part properties + optional size filter
 - [x] Search with a new (non-indexed) STEP file
 - [x] Demo UI (Streamlit)
-- [ ] Reproducibility docs: `environment.yml` for the BRepNet environment, `PATCHES.md` documenting applied fixes, un-nesting the git repos under `external/`
+- [ ] Reproducibility: `environment.yml` for the BRepNet environment, un-nesting the git repos under `external/`
 - [ ] Root-causing weaker match quality on geometrically complex parts (see Known Issues)
 
 Related: a second project (manufacturability/machining-feature screening) shares this same BRepNet backbone and is planned as a parallel effort.
@@ -50,6 +52,7 @@ shape-similarity-search/
 │   ├── part_properties.py      # Size/volume/area/face count per part; builds part_properties.csv (brepnet)
 │   ├── filtered_search.py      # Search with properties + optional size filter (brepnet)
 │   └── search_new_part.py      # Embed a new STEP file and search the index (brepnet)
+├── docs/                    # Reference presentation (.pptx) and project overview (.docx)
 ├── notebooks/               # Exploratory / diagnostic scripts, not part of the pipeline
 │   ├── check_build_sequence.py
 │   └── inspect_retrieval.ipynb  # Visual query tool: inspect query + top matches inline
@@ -79,6 +82,7 @@ This project uses **two separate, isolated environments** — they are not inter
 python -m venv .venv
 .venv\Scripts\activate.bat      # Windows cmd
 pip install -r requirements.txt
+pip install faiss-cpu           # not in requirements.txt
 ```
 
 Core dependency: `cadquery` (OCP bindings to OpenCascade) — used for STEP handling in `src/`.
@@ -98,7 +102,21 @@ cd external/occwl
 pip install .
 ```
 
-BRepNet's own `environment.yml` (Python 3.7, PyTorch 1.7.1, pytorch-lightning 1.5.10) is stale — its `occwl` submodule reference also points to an internal Autodesk server and is not usable externally. The versions above are the confirmed-working modern substitute; BRepNet's code was patched to match (full patch list pending in `PATCHES.md` — see Known Issues).
+BRepNet's own `environment.yml` (Python 3.7, PyTorch 1.7.1, pytorch-lightning 1.5.10) is stale — its `occwl` submodule reference also points to an internal Autodesk server and is not usable externally. The versions above are the confirmed-working modern substitute; BRepNet's code was patched to match (see below).
+
+### Modifications to third-party code
+
+Changes to the vendored copy in `external/BRepNet` so it runs on Python 3.10 / PyTorch 2.14 / PyTorch Lightning 2.6.5:
+
+| File | Change and reason |
+|---|---|
+| `models/brepnet.py` | `LightningModule` import path updated for current PyTorch Lightning. |
+| `models/brepnet.py` | `test_epoch_end` migrated to `on_test_epoch_end()` (old hook removed); test outputs are collected in `on_test_epoch_start`/`test_step`. |
+| `eval/evaluate_folder.py` | Trainer set up as `Trainer(accelerator="cpu", logger=False)`. |
+| `eval/evaluate_folder.py` | `torch.load` patched with `weights_only=False`, since newer PyTorch defaults to weights-only loading. The pretrained checkpoint is trusted. |
+| `pipeline/extract_brepnet_data_from_step.py` | Per-file try/except, so one unreadable STEP file no longer stops a batch run. |
+| `run_batch_embeddings.py` (new) | Copies STEP files to a scratch folder, runs `evaluate_folder`, mean-pools per-face embeddings, writes `embeddings.npy` and the manifest. |
+| occwl dependency | Internal submodule reference replaced by public occwl 3.0.0 built from source (not on PyPI). `pyDeprecate` (pip) and `igl` (conda-forge) added. |
 
 ## Usage
 
